@@ -1,0 +1,29 @@
+name: Veille abonnement EFFIA Le Creusot TGV
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # toutes les 15 min (l'API EFFIA a un cache de 5 min)
+    - cron: "7 7 * * 1"      # lundi ~8h/9h Paris : message "veille active"
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: "Envoyer une notification de test"
+        type: boolean
+        default: true
+
+concurrency:
+  group: veille-effia
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verifier les places d'abonnement
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          HEARTBEAT: ${{ github.event.schedule == '7 7 * * 1' }}
+          TEST_NOTIFICATION: ${{ inputs.test_notification }}
+        run: python3 monitor.py
