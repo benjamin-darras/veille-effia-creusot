@@ -91,6 +91,16 @@ def notify(title, message, priority=3, click=None):
         print(f"[ntfy] envoye ({r.status}) : {title}")
 
 
+def stats_line():
+    total = os.environ.get("RUNS_24H", "").strip()
+    failed = os.environ.get("FAILED_24H", "").strip()
+    if not total or total == "?":
+        return ""
+    if failed and failed not in ("0", "?"):
+        return f"{total} vérifications en 24h, dont {failed} en erreur.\n"
+    return f"{total} vérifications en 24h, aucune erreur.\n"
+
+
 def main():
     if os.environ.get("TEST_NOTIFICATION", "").lower() == "true":
         notify("Test veille EFFIA", "Les notifications fonctionnent.", priority=3,
@@ -131,7 +141,8 @@ def main():
             click=hits[0][2],
         )
     elif os.environ.get("HEARTBEAT", "").lower() == "true":
-        notify("Veille EFFIA active", "Toujours complet. " + " | ".join(status), priority=2)
+        notify("Veille EFFIA active", stats_line() + " | ".join(status),
+               priority=2)
 
     print("Resultat :", " | ".join(status))
     if errors:
