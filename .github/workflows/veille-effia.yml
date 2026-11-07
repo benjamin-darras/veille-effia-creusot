@@ -2,28 +2,42 @@ name: Veille abonnement EFFIA Le Creusot TGV
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # toutes les 15 min (l'API EFFIA a un cache de 5 min)
-    - cron: "7 7 * * 1"      # lundi ~8h/9h Paris : message "veille active"
+    - cron: "*/15 * * * *"   # toutes les 15 min (GitHub peut espacer jusqu'a ~50 min)
+    - cron: "7 6 * * *"      # chaque matin ~7h Paris (8h en ete) : message "veille active"
   workflow_dispatch:
     inputs:
       test_notification:
-        description: "Envoyer une notification de test"
+        description: "Envoyer le message du matin (test)"
         type: boolean
         default: true
-
-concurrency:
-  group: veille-effia
-  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    env:
+      MORNING: ${{ github.event.schedule == '7 6 * * *' || inputs.test_notification == true }}
     steps:
       - uses: actions/checkout@v4
+      - name: Compter les verifications des dernieres 24h
+        id: stats
+        if: env.MORNING == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          base="repos/${{ github.repository }}/actions/runs?event=schedule&per_page=1&created=%3E%3D${since}"
+          total=$(gh api "$base" --jq '.total_count' || echo "?")
+          failed=$(gh api "${base}&status=failure" --jq '.total_count' || echo "?")
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
       - name: Verifier les places d'abonnement
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          HEARTBEAT: ${{ github.event.schedule == '7 7 * * 1' }}
-          TEST_NOTIFICATION: ${{ inputs.test_notification }}
+          HEARTBEAT: ${{ env.MORNING }}
+          RUNS_24H: ${{ steps.stats.outputs.total }}
+          FAILED_24H: ${{ steps.stats.outputs.failed }}
         run: python3 monitor.py
